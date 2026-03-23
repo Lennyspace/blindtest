@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Room } from './game/Room.js';
 import { fetchPlaylistTracks, fetchPlaylistInfo, extractPlaylistId } from './youtube.js';
-import { fetchDeezerTracks, fetchDeezerPlaylistInfo, extractDeezerPlaylistId } from './deezer.js';
+import { fetchDeezerTracks, fetchDeezerPlaylistInfo, extractDeezerPlaylistId, resolveDeezerShortLink } from './deezer.js';
 import { THEMES } from './themes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -110,12 +110,13 @@ io.on('connection', (socket) => {
     room.configure({ roundCount, duration });
 
     // Detect source and resolve ID
-    const isDeezer = customUrl?.includes('deezer.com');
+    const isDeezer = customUrl?.includes('deezer.com'); // catches deezer.com AND link.deezer.com
     let pid = playlistId;
 
     if (customUrl) {
       if (isDeezer) {
-        pid = extractDeezerPlaylistId(customUrl);
+        const resolvedUrl = await resolveDeezerShortLink(customUrl);
+        pid = extractDeezerPlaylistId(resolvedUrl);
         if (!pid) return socket.emit('room:error', { message: 'URL Deezer invalide' });
       } else {
         pid = extractPlaylistId(customUrl);

@@ -5,11 +5,26 @@ const DEEZER_API = 'https://api.deezer.com';
 export function extractDeezerPlaylistId(input) {
   if (!input) return null;
   input = input.trim();
-  // Raw numeric ID
   if (/^\d+$/.test(input)) return input;
-  // URL: deezer.com/xx/playlist/123456 or deezer.com/playlist/123456
   const m = input.match(/deezer\.com(?:\/[a-z]{2})?\/playlist\/(\d+)/i);
   return m ? m[1] : null;
+}
+
+// Resolve short links like link.deezer.com/s/xxx → real playlist URL
+export async function resolveDeezerShortLink(url) {
+  if (!url.includes('link.deezer.com')) return url;
+  try {
+    const res = await axios.get(url, {
+      maxRedirects: 5,
+      validateStatus: s => s < 400,
+    });
+    // axios follows redirects and gives us the final URL
+    return res.request?.res?.responseUrl || res.config?.url || url;
+  } catch (err) {
+    // Some redirects return 3xx without following — check Location header
+    if (err.response?.headers?.location) return err.response.headers.location;
+    throw err;
+  }
 }
 
 export async function fetchDeezerPlaylistInfo(playlistId) {
