@@ -91,19 +91,48 @@ export default function AudioPlayer({ source, videoId, previewUrl, startSeconds 
     return () => { if (ytPlayer.current) { try { ytPlayer.current.destroy(); } catch {} ytPlayer.current = null; } };
   }, [videoId, startSeconds, source]);
 
-  // ── Deezer (HTML5 audio via server proxy) ──
+  // ── Deezer (HTML5 audio, muted-autoplay trick) ──
   useEffect(() => {
     if (source !== 'deezer' || !previewUrl) return;
     setPlaying(false);
-    const proxied = `/api/audio-proxy?url=${encodeURIComponent(previewUrl)}`;
-    const audio = new Audio(proxied);
+
+    const audio = new Audio(previewUrl);
+    audio.crossOrigin = 'anonymous';
+    audio.muted = true; // muted = allowed by autoplay policy
     audio.volume = volume / 100;
     audioRef.current = audio;
-    audio.play().catch(() => {});
-    audio.addEventListener('playing', () => { setPlaying(true); hideMediaSession(); });
-    audio.addEventListener('pause',   () => setPlaying(false));
-    audio.addEventListener('ended',   () => setPlaying(false));
-    return () => { audio.pause(); audio.src = ''; audioRef.current = null; };
+
+    audio.addEventListener('playing', () => {
+      audio.muted = false; // unmute as soon as it plays
+      setPlaying(true);
+      hideMediaSession();
+    });
+    audio.addEventListener('pause', () => setPlaying(false));
+    audio.addEventListener('ended', () => setPlaying(false));
+    audio.addEventListener('error', (e) => {
+      // Fallback: try via proxy if direct fails
+      const proxied = `/api/audio-proxy?url=${encodeURIComponent(previewUrl)}`;
+      audio.src = proxied;
+      audio.play().catch(() => {});
+    });
+
+    audio.play().catch(() => {
+      // If muted autoplay also fails, try proxy directly
+      const proxied = `/api/audio-proxy?url=${encodeURIComponent(previewUrl)}`;
+      const a2 = new Audio(proxied);
+      a2.volume = volume / 100;
+      audioRef.current = a2;
+      a2.addEventListener('playing', () => { setPlaying(true); hideMediaSession(); });
+      a2.addEventListener('pause', () => setPlaying(false));
+      a2.addEventListener('ended', () => setPlaying(false));
+      a2.play().catch(() => {});
+    });
+
+    return () => {
+      audioRef.current?.pause();
+      if (audioRef.current) audioRef.current.src = '';
+      audioRef.current = null;
+    };
   }, [previewUrl, source]);
 
   const handleVolume = (v) => {
