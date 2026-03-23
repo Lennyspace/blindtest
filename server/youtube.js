@@ -22,15 +22,17 @@ function parseVideoTitle(raw, channelTitle) {
 
   const dashIdx = cleaned.indexOf(' - ');
   if (dashIdx !== -1) {
-    return {
-      artist: cleaned.slice(0, dashIdx).trim(),
-      title: cleaned.slice(dashIdx + 3).trim(),
-    };
+    const rawArtist = cleaned.slice(0, dashIdx).trim();
+    const artist = rawArtist.replace(/\s*-\s*topic$/i, '').replace(/\s*(vevo|official|officiel)$/i, '').trim();
+    return { artist, title: cleaned.slice(dashIdx + 3).trim() };
   }
 
   // No " - " found → use channel name as artist
   const artist = channelTitle
-    ? channelTitle.replace(/\s*(officiel|official|vevo|music|records?|tv)$/i, '').trim()
+    ? channelTitle
+        .replace(/\s*-\s*topic$/i, '')           // "Ed Sheeran - Topic" → "Ed Sheeran"
+        .replace(/\s*(officiel|official|vevo|music|records?|tv|channel)$/i, '')
+        .trim()
     : '';
 
   return { artist, title: cleaned };

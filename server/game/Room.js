@@ -16,13 +16,15 @@ function pickDiverse(pool, count) {
   const seen = new Set();
   const picked = [];
 
-  // First pass: one track per artist
+  // First pass: max 2 tracks per artist
+  const artistCount = new Map();
   for (const track of shuffled) {
     if (picked.length >= count) break;
     const key = (track.artist || '').toLowerCase().trim();
-    if (!key || !seen.has(key)) {
+    const n = artistCount.get(key) || 0;
+    if (!key || n < 2) {
       picked.push(track);
-      if (key) seen.add(key);
+      artistCount.set(key, n + 1);
     }
   }
 
