@@ -1,19 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import { socket } from '../socket.js';
 import CircularTimer from '../components/CircularTimer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
+function formatMs(ms) {
+  if (ms == null) return '—';
+  const s = (ms / 1000).toFixed(1);
+  return `${s}s`;
+}
+
 export default function Game({ code, roomState, gameData, roundResult, myAnswer }) {
   const [artist, setArtist] = useState('');
   const [title, setTitle] = useState('');
   const [playerStatuses, setPlayerStatuses] = useState({});
-  const [notifications, setNotifications] = useState([]);
-  const [autoNext, setAutoNext] = useState(null); // countdown seconds
+  const [autoNext, setAutoNext] = useState(null);
+  const [countdown, setCountdown] = useState(null); // 3-2-1 overlay
+  const [hint, setHint] = useState(null); // { artistHint, titleHint }
+  const [artistShake, setArtistShake] = useState(false);
+  const [titleShake, setTitleShake] = useState(false);
   const artistRef = useRef(null);
   const cooldown = useRef(false);
   const autoNextRef = useRef(null);
+  const prevAnswer = useRef(null);
 
   const isHost = roomState?.hostId === socket.id;
   const players = [...(roomState?.players || [])].sort((a, b) => b.score - a.score);
@@ -24,14 +35,26 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
   const isOver = !!roundResult;
   const fullyCorrect = myAnswer?.artistCorrect && myAnswer?.titleCorrect;
 
+  // Reset on new round + 3-2-1 countdown
   useEffect(() => {
+    if (!gameData) return;
     setArtist(''); setTitle('');
     setPlayerStatuses({});
-    setNotifications([]);
     setAutoNext(null);
+    setHint(null);
     clearInterval(autoNextRef.current);
     cooldown.current = false;
-    setTimeout(() => artistRef.current?.focus(), 200);
+    prevAnswer.current = null;
+
+    // 3-2-1 countdown
+    setCountdown(3);
+    let n = 3;
+    const iv = setInterval(() => {
+      n -= 1;
+      if (n <= 0) { clearInterval(iv); setCountdown(null); setTimeout(() => artistRef.current?.focus(), 50); }
+      else setCountdown(n);
+    }, 1000);
+    return () => clearInterval(iv);
   }, [gameData]);
 
   // Auto-next countdown display
@@ -47,11 +70,47 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
     return () => clearInterval(autoNextRef.current);
   }, [roundResult]);
 
+  // Player statuses
   useEffect(() => {
     const handler = (statuses) => setPlayerStatuses(statuses);
     socket.on('game:player-statuses', handler);
     return () => socket.off('game:player-statuses', handler);
   }, []);
+
+  // Hint
+  useEffect(() => {
+    const handler = (h) => setHint(h);
+    socket.on('game:hint', handler);
+    return () => socket.off('game:hint', handler);
+  }, []);
+
+  // Pending submission ref: what artist/title the user just submitted
+  const pendingRef = useRef({ artist: '', title: '' });
+
+  // Handle answer result: confetti on correct, shake on wrong
+  useEffect(() => {
+    if (!myAnswer) return;
+    const prev = prevAnswer.current || {};
+    const newArtist = myAnswer.artistCorrect && !prev.artistCorrect;
+    const newTitle = myAnswer.titleCorrect && !prev.titleCorrect;
+
+    if (newArtist || newTitle) {
+      confetti({ particleCount: myAnswer.artistCorrect && myAnswer.titleCorrect ? 120 : 60,
+        spread: 70, origin: { y: 0.7 }, colors: ['#8b5cf6','#6ee7b7','#67e8f9','#fbbf24'] });
+    }
+
+    // Shake wrong fields (only if we just submitted something for them)
+    if (!myAnswer.artistCorrect && pendingRef.current.artist) {
+      setArtistShake(true);
+      setTimeout(() => { setArtistShake(false); setArtist(''); }, 500);
+    }
+    if (!myAnswer.titleCorrect && pendingRef.current.title) {
+      setTitleShake(true);
+      setTimeout(() => { setTitleShake(false); setTitle(''); }, 500);
+    }
+    pendingRef.current = { artist: '', title: '' };
+    prevAnswer.current = myAnswer;
+  }, [myAnswer]);
 
   const submit = (e) => {
     e?.preventDefault();
@@ -59,11 +118,34 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
     if (!artist.trim() && !title.trim()) return;
     cooldown.current = true;
     setTimeout(() => { cooldown.current = false; }, 700);
+    // Track what we're submitting so we can detect wrong answer
+    pendingRef.current = {
+      artist: !myAnswer?.artistCorrect ? artist.trim() : '',
+      title: !myAnswer?.titleCorrect ? title.trim() : '',
+    };
     socket.emit('answer:submit', { code, artist: artist.trim(), title: title.trim() });
   };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+
+      {/* 3-2-1 overlay */}
+      {countdown !== null && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(7,7,15,0.85)', backdropFilter: 'blur(8px)',
+          pointerEvents: 'none',
+        }}>
+          <span key={countdown} style={{
+            fontFamily: 'var(--font-display)', fontSize: '120px', fontWeight: 900,
+            color: 'var(--primary)', textShadow: '0 0 40px var(--primary-glow)',
+            animation: 'popIn 0.4s ease',
+          }}>
+            {countdown}
+          </span>
+        </div>
+      )}
 
       {/* Top bar */}
       <div style={{
@@ -74,7 +156,6 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
         backdropFilter: 'blur(12px)',
         position: 'sticky', top: 0, zIndex: 10,
       }}>
-        {/* Playlist name */}
         {playlistName && (
           <span style={{
             fontSize: '12px', color: 'var(--text-muted)',
@@ -85,7 +166,6 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
           </span>
         )}
 
-        {/* Progress bar */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             flex: 1, height: '3px',
@@ -105,7 +185,6 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
           </span>
         </div>
 
-        {/* Timer */}
         {!isOver && (
           <CircularTimer
             key={`${roundIndex}-${gameData?.videoId}`}
@@ -183,6 +262,42 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                   </span>
                 </div>
               )}
+
+              {/* Round stats */}
+              {roundResult.stats && (
+                <div style={{ marginTop: '14px' }}>
+                  <p style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>
+                    Stats de la manche
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {players.map(p => {
+                      const st = roundResult.stats[p.id];
+                      if (!st) return null;
+                      const isMe = p.id === socket.id;
+                      return (
+                        <div key={p.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: '5px 8px', borderRadius: '6px',
+                          background: isMe ? 'var(--primary-dim)' : 'var(--surface-2)',
+                          fontSize: '12px',
+                        }}>
+                          <span style={{ flex: 1, color: isMe ? '#c4b5fd' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.name}
+                          </span>
+                          <span style={{ color: st.artistCorrect ? '#6ee7b7' : 'var(--text-muted)' }}>A{st.artistCorrect ? '✓' : '✗'}</span>
+                          <span style={{ color: st.titleCorrect ? '#67e8f9' : 'var(--text-muted)' }}>T{st.titleCorrect ? '✓' : '✗'}</span>
+                          {st.finishTime != null && (
+                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '11px' }}>
+                              {formatMs(st.finishTime)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {isHost ? (
                 <button className="btn btn-secondary btn-sm" style={{ width:'100%', marginTop:'10px' }}
                   onClick={() => { clearInterval(autoNextRef.current); socket.emit('round:next', { code }); }}>
@@ -222,6 +337,20 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                 </div>
               )}
 
+              {/* Hint */}
+              {hint && (
+                <div style={{
+                  padding: '7px 12px', background: 'rgba(251,191,36,0.1)',
+                  border: '1px solid rgba(251,191,36,0.25)', borderRadius: 'var(--radius)',
+                  fontSize: '12px', color: '#fbbf24', display: 'flex', gap: '12px',
+                  animation: 'slideUp 0.3s ease',
+                }}>
+                  💡 Indice —
+                  {!myAnswer?.artistCorrect && <span>Artiste : <strong>{hint.artistHint}…</strong></span>}
+                  {!myAnswer?.titleCorrect && <span>Titre : <strong>{hint.titleHint}…</strong></span>}
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>
@@ -229,7 +358,7 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                   </label>
                   <input
                     ref={artistRef}
-                    className={myAnswer?.artistCorrect ? 'correct' : ''}
+                    className={myAnswer?.artistCorrect ? 'correct' : artistShake ? 'shake-wrong' : ''}
                     placeholder="Artiste…"
                     value={myAnswer?.artistCorrect ? (myAnswer.canonicalArtist || artist) : artist}
                     onChange={e => setArtist(e.target.value)}
@@ -241,7 +370,7 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                     Titre
                   </label>
                   <input
-                    className={myAnswer?.titleCorrect ? 'correct' : ''}
+                    className={myAnswer?.titleCorrect ? 'correct' : titleShake ? 'shake-wrong' : ''}
                     placeholder="Titre…"
                     value={myAnswer?.titleCorrect ? (myAnswer.canonicalTitle || title) : title}
                     onChange={e => setTitle(e.target.value)}
@@ -293,7 +422,6 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                   }}>
                     {p.name}
                   </span>
-                  {/* Status badges */}
                   <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                     {st.artistCorrect && (
                       <span title="Artiste trouvé" style={{
@@ -320,24 +448,6 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
             })}
           </div>
         </div>
-      </div>
-
-      {/* Toast notifications */}
-      <div style={{
-        position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center',
-        pointerEvents: 'none', zIndex: 50,
-      }}>
-        {notifications.map(n => (
-          <div key={n.id} style={{
-            padding: '6px 14px',
-            background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)',
-            borderRadius: 'var(--radius-full)', color: '#6ee7b7', fontSize: '13px',
-            backdropFilter: 'blur(10px)', animation: 'popIn 0.2s ease',
-          }}>
-            {n.text}
-          </div>
-        ))}
       </div>
     </div>
   );
