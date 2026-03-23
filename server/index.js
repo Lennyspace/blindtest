@@ -148,6 +148,7 @@ io.on('connection', (socket) => {
     const isDeezer = customUrl?.includes('deezer.com');
     let pid = playlistId;
 
+    let themeSource = null;
     if (customUrl) {
       if (isDeezer) {
         pid = extractDeezerPlaylistId(customUrl);
@@ -156,23 +157,24 @@ io.on('connection', (socket) => {
         pid = extractPlaylistId(customUrl);
         if (!pid) return socket.emit('room:error', { message: 'URL YouTube invalide' });
       }
-    } else if (!pid) {
-      pid = THEMES[0].playlistId;
     } else {
-      const theme = THEMES.find(t => t.id === pid);
-      if (theme) pid = theme.playlistId;
+      const theme = THEMES.find(t => t.id === pid) || THEMES[0];
+      pid = theme.playlistId;
+      themeSource = theme.source;
     }
+
+    const useDeezer = isDeezer || themeSource === 'deezer';
 
     try {
       socket.emit('room:loading', { message: 'Chargement de la playlist...' });
       let tracks, playlistName;
 
-      if (isDeezer) {
+      if (useDeezer) {
         [tracks, playlistName] = await Promise.all([
           fetchDeezerTracks(pid, 200),
           fetchDeezerPlaylistInfo(pid).catch(() => 'Playlist Deezer'),
         ]);
-      } else {
+      } else if (!isDeezer) {
         [tracks, playlistName] = await Promise.all([
           fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, 200),
           fetchPlaylistInfo(pid, process.env.YOUTUBE_API_KEY).catch(() => ''),
