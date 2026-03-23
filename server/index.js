@@ -125,7 +125,7 @@ io.on('connection', (socket) => {
     try {
       socket.emit('room:loading', { message: 'Chargement de la playlist...' });
       const [tracks, playlistName] = await Promise.all([
-        fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, roundCount || 10),
+        fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, 200), // fetch large pool for diversity
         fetchPlaylistInfo(pid, process.env.YOUTUBE_API_KEY).catch(() => ''),
       ]);
       if (!tracks.length) return socket.emit('room:error', { message: 'Playlist vide ou inaccessible' });
@@ -145,6 +145,12 @@ io.on('connection', (socket) => {
     if (room.state !== 'lobby') return;
     if (!room.playlist.length) return socket.emit('room:error', { message: 'Aucune playlist choisie' });
     if (room.players.size < 1) return;
+
+    // Re-shuffle pool every new game for variety
+    room.reshufflePlaylist();
+    room.currentRound = 0;
+    // Reset scores
+    for (const p of room.players.values()) p.score = 0;
 
     const roundData = room.startRound();
     if (!roundData) return;

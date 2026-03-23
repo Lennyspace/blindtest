@@ -9,6 +9,34 @@ function shuffle(arr) {
   return a;
 }
 
+// Pick `count` tracks from pool with artist diversity:
+// max 1 track per artist, shuffle the pool first for true randomness each game
+function pickDiverse(pool, count) {
+  const shuffled = shuffle(pool);
+  const seen = new Set();
+  const picked = [];
+
+  // First pass: one track per artist
+  for (const track of shuffled) {
+    if (picked.length >= count) break;
+    const key = (track.artist || '').toLowerCase().trim();
+    if (!key || !seen.has(key)) {
+      picked.push(track);
+      if (key) seen.add(key);
+    }
+  }
+
+  // Second pass: fill remaining slots if playlist has few artists
+  if (picked.length < count) {
+    for (const track of shuffled) {
+      if (picked.length >= count) break;
+      if (!picked.includes(track)) picked.push(track);
+    }
+  }
+
+  return shuffle(picked); // shuffle again so order is random too
+}
+
 // Speed bonus: decreasing per rank
 const SPEED_BONUS = [300, 200, 150, 100, 50];
 
@@ -64,9 +92,15 @@ export class Room {
   }
 
   setPlaylist(tracks, name = '') {
-    this.playlist = shuffle(tracks).slice(0, this.config.roundCount);
+    this.allTracks = tracks; // keep full pool for re-shuffling on replay
+    this.playlist = pickDiverse(tracks, this.config.roundCount);
     this.config.roundCount = this.playlist.length;
     this.playlistName = name;
+  }
+
+  reshufflePlaylist() {
+    if (!this.allTracks?.length) return;
+    this.playlist = pickDiverse(this.allTracks, this.config.roundCount);
   }
 
   startRound() {
