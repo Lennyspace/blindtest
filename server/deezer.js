@@ -1,5 +1,15 @@
 import axios from 'axios';
 
+function cleanTitle(s) {
+  if (!s) return s;
+  return s
+    .replace(/\s*[\[(][^\])]*(remaster|remastered|deluxe|edition|version|radio\s*edit|single|live|acoustic|instrumental|anniversary|bonus|extended|explicit|clean|mono|stereo|\d{4})[^\])]*[\])]/gi, '')
+    .replace(/\s*\(\d{4}\)/g, '')
+    .replace(/\s*[\[|(](prod\.?.*?)[)\]]/gi, '')
+    .replace(/\s*[\[(](official\s*(music\s*)?video|lyrics?|audio|clip\s*officiel|hd|hq|4k|visualizer|lyric\s*video|vevo|paroles?)[)\]]/gi, '')
+    .trim();
+}
+
 const DEEZER_API = 'https://api.deezer.com';
 
 export function extractDeezerPlaylistId(input) {
@@ -34,7 +44,7 @@ export async function fetchDeezerTracks(playlistId, maxTracks = 200) {
         source: 'deezer',
         previewUrl: item.preview,
         artist: item.artist?.name || '',
-        title: item.title || '',
+        title: cleanTitle(item.title || ''),
         thumbnail: item.album?.cover_medium || null,
       });
     }
