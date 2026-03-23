@@ -10,8 +10,10 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
   const [title, setTitle] = useState('');
   const [playerStatuses, setPlayerStatuses] = useState({});
   const [notifications, setNotifications] = useState([]);
+  const [autoNext, setAutoNext] = useState(null); // countdown seconds
   const artistRef = useRef(null);
   const cooldown = useRef(false);
+  const autoNextRef = useRef(null);
 
   const isHost = roomState?.hostId === socket.id;
   const players = [...(roomState?.players || [])].sort((a, b) => b.score - a.score);
@@ -26,9 +28,24 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
     setArtist(''); setTitle('');
     setPlayerStatuses({});
     setNotifications([]);
+    setAutoNext(null);
+    clearInterval(autoNextRef.current);
     cooldown.current = false;
     setTimeout(() => artistRef.current?.focus(), 200);
   }, [gameData]);
+
+  // Auto-next countdown display
+  useEffect(() => {
+    if (!roundResult?.autoNextIn) return;
+    let secs = roundResult.autoNextIn;
+    setAutoNext(secs);
+    autoNextRef.current = setInterval(() => {
+      secs -= 1;
+      setAutoNext(secs);
+      if (secs <= 0) clearInterval(autoNextRef.current);
+    }, 1000);
+    return () => clearInterval(autoNextRef.current);
+  }, [roundResult]);
 
   useEffect(() => {
     const handler = (statuses) => setPlayerStatuses(statuses);
@@ -166,9 +183,14 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                   </span>
                 </div>
               )}
-              {!isHost && (
-                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', marginTop: '12px' }}>
-                  En attente de l'hôte…
+              {isHost ? (
+                <button className="btn btn-secondary btn-sm" style={{ width:'100%', marginTop:'10px' }}
+                  onClick={() => { clearInterval(autoNextRef.current); socket.emit('round:next', { code }); }}>
+                  Passer maintenant →
+                </button>
+              ) : (
+                <p style={{ textAlign:'center', color:'var(--text-muted)', fontSize:'12px', marginTop:'12px' }}>
+                  {autoNext > 0 ? `Prochaine manche dans ${autoNext}s…` : 'Chargement…'}
                 </p>
               )}
             </div>

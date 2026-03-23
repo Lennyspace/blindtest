@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import axios from 'axios';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -68,12 +69,32 @@ function emitRoomState(room) {
 
 function scheduleRoundEnd(room, duration) {
   clearTimeout(room.roundTimer);
+  clearTimeout(room.autoNextTimer);
   room.roundTimer = setTimeout(() => {
     if (room.state !== 'playing') return;
     const result = room.endRound();
-    io.to(room.code).emit('game:round-end', result);
+    io.to(room.code).emit('game:round-end', { ...result, autoNextIn: AUTO_NEXT_DELAY / 1000 });
     emitRoomState(room);
+    scheduleAutoNext(room);
   }, duration * 1000);
+}
+
+const AUTO_NEXT_DELAY = 7000; // 7s after reveal before auto-advancing
+
+function scheduleAutoNext(room) {
+  clearTimeout(room.autoNextTimer);
+  room.autoNextTimer = setTimeout(() => {
+    if (room.state !== 'round-end') return;
+    const roundData = room.nextRound();
+    if (!roundData) {
+      io.to(room.code).emit('game:over', { finalScores: room.getFinalScores() });
+      emitRoomState(room);
+      return;
+    }
+    io.to(room.code).emit('game:round-start', roundData);
+    emitRoomState(room);
+    scheduleRoundEnd(room, roundData.duration);
+  }, AUTO_NEXT_DELAY);
 }
 
 // ─── Socket handlers ──────────────────────────────────────────────────────────
@@ -207,22 +228,23 @@ io.on('connection', (socket) => {
     if (room.allPlayersFinished()) {
       clearTimeout(room.roundTimer);
       const roundResult = room.endRound();
-      io.to(code).emit('game:round-end', roundResult);
+      io.to(code).emit('game:round-end', { ...roundResult, autoNextIn: AUTO_NEXT_DELAY / 1000 });
       emitRoomState(room);
+      scheduleAutoNext(room);
     }
   });
 
-  // Host advances to next round
+  // Host advances to next round (manual skip)
   socket.on('round:next', ({ code }) => {
     const room = rooms.get(code);
     if (!room || room.hostId !== socket.id) return;
     if (room.state !== 'round-end') return;
 
+    clearTimeout(room.autoNextTimer); // cancel auto-advance
+
     const roundData = room.nextRound();
     if (!roundData) {
-      // Game over
-      const finalScores = room.getFinalScores();
-      io.to(code).emit('game:over', { finalScores });
+      io.to(code).emit('game:over', { finalScores: room.getFinalScores() });
       emitRoomState(room);
       return;
     }
