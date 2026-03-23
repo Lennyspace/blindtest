@@ -20,6 +20,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
   const [roundCount, setRoundCount] = useState(10);
   const [duration, setDuration] = useState(30);
   const [hints, setHints] = useState(true);
+  const [autoNext, setAutoNext] = useState(8);
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [trackCount, setTrackCount] = useState(null);
@@ -61,6 +62,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
       roundCount,
       duration,
       hints,
+      autoNext,
     });
   };
 
@@ -207,6 +209,24 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                       </div>
                       <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>💡 Indices à 15s</span>
                     </label>
+                    <div style={{ marginTop: '12px' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>⏭ Prochaine manche après</p>
+                      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                        {[5, 8, 12, 20].map(s => (
+                          <button key={s} type="button"
+                            onClick={() => setAutoNext(s)}
+                            style={{
+                              padding: '4px 10px', borderRadius: 'var(--radius)',
+                              background: autoNext === s ? 'var(--primary-dim)' : 'var(--surface-2)',
+                              border: `1px solid ${autoNext === s ? 'rgba(124,58,237,0.35)' : 'var(--border)'}`,
+                              color: autoNext === s ? '#c4b5fd' : 'var(--text-muted)',
+                              cursor: 'pointer', fontSize: '12px', fontWeight: autoNext === s ? 600 : 400,
+                              transition: 'all 0.15s',
+                            }}
+                          >{s}s</button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -256,6 +276,10 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                     <div>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Indices</p>
                       <p style={{ fontSize: '14px', fontWeight: 500 }}>{configInfo.hints ? '💡 Oui' : '—'}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Prochaine manche</p>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 700 }}>{configInfo.autoNext ?? 8}s</p>
                     </div>
                   </div>
                 )}

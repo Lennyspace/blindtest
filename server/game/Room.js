@@ -55,7 +55,7 @@ export class Room {
     this.roundTimer = null;
     this.currentVideo = null;
     this.speedOrder = [];
-    this.config = { roundCount: 10, duration: 30, hints: true };
+    this.config = { roundCount: 10, duration: 30, hints: true, autoNext: 8 };
     this._addPlayer(hostId, hostName, true);
   }
 
@@ -88,10 +88,11 @@ export class Room {
 
   isEmpty() { return this.players.size === 0; }
 
-  configure({ roundCount, duration, hints }) {
+  configure({ roundCount, duration, hints, autoNext }) {
     if (roundCount) this.config.roundCount = Math.min(Math.max(1, roundCount), 30);
     if (duration)   this.config.duration   = Math.min(Math.max(10, duration), 90);
     if (hints !== undefined) this.config.hints = hints;
+    if (autoNext)   this.config.autoNext   = Math.min(Math.max(3, autoNext), 30);
   }
 
   setPlaylist(tracks, name = '') {

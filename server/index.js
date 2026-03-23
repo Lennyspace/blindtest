@@ -84,17 +84,17 @@ function scheduleRoundEnd(room, duration) {
   room.roundTimer = setTimeout(() => {
     if (room.state !== 'playing') return;
     const result = room.endRound();
-    io.to(room.code).emit('game:round-end', { ...result, autoNextIn: AUTO_NEXT_DELAY / 1000 });
+    const autoNextDelay = room.config.autoNext * 1000;
+    io.to(room.code).emit('game:round-end', { ...result, autoNextIn: room.config.autoNext });
     emitRoomState(room);
-    scheduleAutoNext(room);
+    scheduleAutoNext(room, autoNextDelay);
   }, duration * 1000);
 }
 
-const AUTO_NEXT_DELAY = 8000;
 const COUNTDOWN_SEC   = 3;
 const HINT_AFTER_SEC  = 15;
 
-function scheduleAutoNext(room) {
+function scheduleAutoNext(room, delay) {
   clearTimeout(room.autoNextTimer);
   room.autoNextTimer = setTimeout(() => {
     if (room.state !== 'round-end') return;
@@ -107,7 +107,7 @@ function scheduleAutoNext(room) {
     io.to(room.code).emit('game:round-start', roundData);
     emitRoomState(room);
     scheduleRoundEnd(room, roundData.duration);
-  }, AUTO_NEXT_DELAY);
+  }, delay);
 }
 
 // ─── Socket handlers ──────────────────────────────────────────────────────────
@@ -150,12 +150,12 @@ io.on('connection', (socket) => {
   });
 
   // Host configures the game (playlist + settings)
-  socket.on('game:configure', async ({ code, playlistId, customUrl, roundCount, duration, hints }) => {
+  socket.on('game:configure', async ({ code, playlistId, customUrl, roundCount, duration, hints, autoNext }) => {
     const room = rooms.get(code);
     if (!room || room.hostId !== socket.id) return;
     if (room.state !== 'lobby') return;
 
-    room.configure({ roundCount, duration, hints });
+    room.configure({ roundCount, duration, hints, autoNext });
 
     // Detect source and resolve ID
     const isDeezer = customUrl?.includes('deezer.com');
@@ -243,9 +243,10 @@ io.on('connection', (socket) => {
     if (room.allPlayersFinished()) {
       clearTimeout(room.roundTimer);
       const roundResult = room.endRound();
-      io.to(code).emit('game:round-end', { ...roundResult, autoNextIn: AUTO_NEXT_DELAY / 1000 });
+      const autoNextDelay = room.config.autoNext * 1000;
+      io.to(code).emit('game:round-end', { ...roundResult, autoNextIn: room.config.autoNext });
       emitRoomState(room);
-      scheduleAutoNext(room);
+      scheduleAutoNext(room, autoNextDelay);
     }
   });
 
