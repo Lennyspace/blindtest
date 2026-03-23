@@ -132,7 +132,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                       Ou URL playlist YouTube
                     </label>
                     <input
-                      type="url" placeholder="https://youtube.com/playlist?list=..."
+                      type="url" placeholder="https://youtube.com/playlist?list=... ou https://deezer.com/playlist/..."
                       value={customUrl}
                       onChange={e => { setCustomUrl(e.target.value); setSelectedTheme(null); }}
                     />

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Room } from './game/Room.js';
 import { fetchPlaylistTracks, fetchPlaylistInfo, extractPlaylistId } from './youtube.js';
+import { fetchDeezerTracks, fetchDeezerPlaylistInfo, extractDeezerPlaylistId } from './deezer.js';
 import { THEMES } from './themes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -108,33 +109,48 @@ io.on('connection', (socket) => {
 
     room.configure({ roundCount, duration });
 
-    // Resolve playlist ID
+    // Detect source and resolve ID
+    const isDeezer = customUrl?.includes('deezer.com');
     let pid = playlistId;
+
     if (customUrl) {
-      pid = extractPlaylistId(customUrl);
-      if (!pid) return socket.emit('room:error', { message: 'URL de playlist invalide' });
+      if (isDeezer) {
+        pid = extractDeezerPlaylistId(customUrl);
+        if (!pid) return socket.emit('room:error', { message: 'URL Deezer invalide' });
+      } else {
+        pid = extractPlaylistId(customUrl);
+        if (!pid) return socket.emit('room:error', { message: 'URL YouTube invalide' });
+      }
     } else if (!pid) {
-      // Use a default theme
       pid = THEMES[0].playlistId;
     } else {
-      // Predefined theme ID — look up playlist ID
       const theme = THEMES.find(t => t.id === pid);
       if (theme) pid = theme.playlistId;
     }
 
     try {
       socket.emit('room:loading', { message: 'Chargement de la playlist...' });
-      const [tracks, playlistName] = await Promise.all([
-        fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, 200), // fetch large pool for diversity
-        fetchPlaylistInfo(pid, process.env.YOUTUBE_API_KEY).catch(() => ''),
-      ]);
+      let tracks, playlistName;
+
+      if (isDeezer) {
+        [tracks, playlistName] = await Promise.all([
+          fetchDeezerTracks(pid, 200),
+          fetchDeezerPlaylistInfo(pid).catch(() => 'Playlist Deezer'),
+        ]);
+      } else {
+        [tracks, playlistName] = await Promise.all([
+          fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, 200),
+          fetchPlaylistInfo(pid, process.env.YOUTUBE_API_KEY).catch(() => ''),
+        ]);
+      }
+
       if (!tracks.length) return socket.emit('room:error', { message: 'Playlist vide ou inaccessible' });
       room.setPlaylist(tracks, playlistName);
       socket.emit('room:configured', { trackCount: tracks.length, playlistName });
       emitRoomState(room);
     } catch (err) {
-      console.error('YouTube API error:', err.message);
-      socket.emit('room:error', { message: 'Impossible de charger la playlist YouTube' });
+      console.error('Playlist error:', err.message);
+      socket.emit('room:error', { message: 'Impossible de charger la playlist' });
     }
   });
 

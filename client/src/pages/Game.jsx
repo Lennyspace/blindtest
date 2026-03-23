@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { socket } from '../socket.js';
 import CircularTimer from '../components/CircularTimer.jsx';
-import YoutubePlayer from '../components/YoutubePlayer.jsx';
+import AudioPlayer from '../components/AudioPlayer.jsx';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -119,9 +119,11 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
           {!isOver && (
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px' }}>
               {gameData && (
-                <YoutubePlayer
-                  key={gameData.videoId}
+                <AudioPlayer
+                  key={gameData.videoId || gameData.previewUrl}
+                  source={gameData.source || 'youtube'}
                   videoId={gameData.videoId}
+                  previewUrl={gameData.previewUrl}
                   startSeconds={gameData.startSeconds}
                 />
               )}
