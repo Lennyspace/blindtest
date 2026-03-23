@@ -24,6 +24,20 @@ const io = new Server(httpServer, {
 
 app.use(express.json());
 
+// Proxy Deezer preview audio to bypass browser CORS
+app.get('/api/audio-proxy', async (req, res) => {
+  const url = req.query.url;
+  if (!url || !url.includes('dzcdn.net')) return res.status(400).end();
+  try {
+    const upstream = await axios.get(url, { responseType: 'stream' });
+    res.setHeader('Content-Type', upstream.headers['content-type'] || 'audio/mpeg');
+    res.setHeader('Accept-Ranges', 'bytes');
+    upstream.data.pipe(res);
+  } catch {
+    res.status(502).end();
+  }
+});
+
 // Serve React build in production
 if (isProd && existsSync(clientDist)) {
   app.use(express.static(clientDist));

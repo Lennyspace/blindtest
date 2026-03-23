@@ -91,11 +91,12 @@ export default function AudioPlayer({ source, videoId, previewUrl, startSeconds 
     return () => { if (ytPlayer.current) { try { ytPlayer.current.destroy(); } catch {} ytPlayer.current = null; } };
   }, [videoId, startSeconds, source]);
 
-  // ── Deezer (HTML5 audio) ──
+  // ── Deezer (HTML5 audio via server proxy) ──
   useEffect(() => {
     if (source !== 'deezer' || !previewUrl) return;
     setPlaying(false);
-    const audio = new Audio(previewUrl);
+    const proxied = `/api/audio-proxy?url=${encodeURIComponent(previewUrl)}`;
+    const audio = new Audio(proxied);
     audio.volume = volume / 100;
     audioRef.current = audio;
     audio.play().catch(() => {});
