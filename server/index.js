@@ -6,7 +6,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Room } from './game/Room.js';
-import { fetchPlaylistTracks, extractPlaylistId } from './youtube.js';
+import { fetchPlaylistTracks, fetchPlaylistInfo, extractPlaylistId } from './youtube.js';
 import { THEMES } from './themes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -124,10 +124,13 @@ io.on('connection', (socket) => {
 
     try {
       socket.emit('room:loading', { message: 'Chargement de la playlist...' });
-      const tracks = await fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, roundCount || 10);
+      const [tracks, playlistName] = await Promise.all([
+        fetchPlaylistTracks(pid, process.env.YOUTUBE_API_KEY, roundCount || 10),
+        fetchPlaylistInfo(pid, process.env.YOUTUBE_API_KEY).catch(() => ''),
+      ]);
       if (!tracks.length) return socket.emit('room:error', { message: 'Playlist vide ou inaccessible' });
-      room.setPlaylist(tracks);
-      socket.emit('room:configured', { trackCount: tracks.length });
+      room.setPlaylist(tracks, playlistName);
+      socket.emit('room:configured', { trackCount: tracks.length, playlistName });
       emitRoomState(room);
     } catch (err) {
       console.error('YouTube API error:', err.message);
@@ -161,16 +164,10 @@ io.on('connection', (socket) => {
 
     socket.emit('answer:result', result);
 
-    // Notify others that someone answered (anonymized)
-    if (result.artistCorrect || result.titleCorrect) {
-      const player = room.players.get(socket.id);
-      socket.to(code).emit('game:player-answered', {
-        playerId: socket.id,
-        name: player?.name,
-      });
-    }
+    // Broadcast updated per-player statuses to everyone
+    io.to(code).emit('game:player-statuses', room.getPlayerStatuses());
 
-    // Check if everyone finished
+    // Check if everyone finished → end round early
     if (room.allPlayersFinished()) {
       clearTimeout(room.roundTimer);
       const roundResult = room.endRound();

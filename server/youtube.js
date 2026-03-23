@@ -2,13 +2,10 @@ import axios from 'axios';
 
 const YT_API = 'https://www.googleapis.com/youtube/v3';
 
-// Extract playlist ID from URL or raw ID
 export function extractPlaylistId(input) {
   if (!input) return null;
   input = input.trim();
-  // Already a raw ID (no spaces, no protocol)
   if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return input;
-  // URL with list= param
   try {
     const url = new URL(input);
     return url.searchParams.get('list');
@@ -17,15 +14,12 @@ export function extractPlaylistId(input) {
   }
 }
 
-// Parse "Artist - Song Title (Official Video)" → { artist, title }
-function parseVideoTitle(raw) {
-  // Remove common suffixes
+function parseVideoTitle(raw, channelTitle) {
   const cleaned = raw
-    .replace(/\s*[\[(](official\s*(music\s*)?video|lyrics?|audio|clip\s*officiel|hd|hq|4k|visualizer|lyric\s*video|vevo)[)\]]/gi, '')
+    .replace(/\s*[\[(](official\s*(music\s*)?video|lyrics?|audio|clip\s*officiel|hd|hq|4k|visualizer|lyric\s*video|vevo|paroles?)[)\]]/gi, '')
     .replace(/\s*[\[|(](prod\.?.*?)[)\]]/gi, '')
     .trim();
 
-  // Try splitting on " - " (take first occurrence)
   const dashIdx = cleaned.indexOf(' - ');
   if (dashIdx !== -1) {
     return {
@@ -34,8 +28,20 @@ function parseVideoTitle(raw) {
     };
   }
 
-  // Fallback: whole title
-  return { artist: '', title: cleaned };
+  // No " - " found → use channel name as artist
+  const artist = channelTitle
+    ? channelTitle.replace(/\s*(officiel|official|vevo|music|records?|tv)$/i, '').trim()
+    : '';
+
+  return { artist, title: cleaned };
+}
+
+export async function fetchPlaylistInfo(playlistId, apiKey) {
+  const res = await axios.get(`${YT_API}/playlists`, {
+    params: { part: 'snippet', id: playlistId, key: apiKey },
+  });
+  const item = res.data.items?.[0];
+  return item?.snippet?.title || 'Playlist';
 }
 
 export async function fetchPlaylistTracks(playlistId, apiKey, maxTracks = 50) {
@@ -45,12 +51,7 @@ export async function fetchPlaylistTracks(playlistId, apiKey, maxTracks = 50) {
   let pageToken = undefined;
 
   do {
-    const params = {
-      part: 'snippet',
-      playlistId,
-      maxResults: 50,
-      key: apiKey,
-    };
+    const params = { part: 'snippet', playlistId, maxResults: 50, key: apiKey };
     if (pageToken) params.pageToken = pageToken;
 
     const res = await axios.get(`${YT_API}/playlistItems`, { params });
@@ -61,13 +62,18 @@ export async function fetchPlaylistTracks(playlistId, apiKey, maxTracks = 50) {
       if (!snippet) continue;
       const videoId = snippet.resourceId?.videoId;
       if (!videoId) continue;
-      // Skip deleted/private videos
       if (snippet.title === 'Deleted video' || snippet.title === 'Private video') continue;
 
-      const { artist, title } = parseVideoTitle(snippet.title);
+      const channelTitle = snippet.videoOwnerChannelTitle;
+      const { artist, title } = parseVideoTitle(snippet.title, channelTitle);
       if (!title) continue;
 
-      tracks.push({ videoId, artist, title, thumbnail: snippet.thumbnails?.medium?.url });
+      tracks.push({
+        videoId,
+        artist,
+        title,
+        thumbnail: snippet.thumbnails?.medium?.url,
+      });
     }
 
     pageToken = res.data.nextPageToken;
