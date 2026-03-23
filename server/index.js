@@ -290,6 +290,14 @@ io.on('connection', (socket) => {
     scheduleRoundEnd(room, roundData.duration);
   });
 
+  // Host resets room back to lobby (play again)
+  socket.on('game:reset', ({ code }) => {
+    const room = rooms.get(code);
+    if (!room || room.hostId !== socket.id) return;
+    room.resetToLobby();
+    emitRoomState(room);
+  });
+
   // Host explicitly ends game
   socket.on('game:end', ({ code }) => {
     const room = rooms.get(code);

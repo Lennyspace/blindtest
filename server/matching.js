@@ -48,20 +48,12 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 
-function fuzzyTokenMatch(a, b) {
-  // Each token of 'a' must loosely match some token of 'b'
-  const ta = tokens(a);
-  const tb = tokens(b);
-  if (!ta.length || !tb.length) return false;
-  return ta.every(at =>
-    tb.some(bt => {
-      if (at === bt) return true;
-      if (at.length > 3 && bt.includes(at)) return true;
-      if (bt.length > 3 && at.includes(bt)) return true;
-      const maxDist = Math.min(at.length, bt.length) > 5 ? 2 : 1;
-      return at.length > 2 && bt.length > 2 && levenshtein(at, bt) <= maxDist;
-    })
-  );
+function tokenMatch(at, bt) {
+  if (at === bt) return true;
+  if (at.length > 3 && bt.includes(at)) return true;
+  if (bt.length > 3 && at.includes(bt)) return true;
+  const maxDist = Math.min(at.length, bt.length) > 5 ? 2 : 1;
+  return at.length > 2 && bt.length > 2 && levenshtein(at, bt) <= maxDist;
 }
 
 export function isCorrect(answer, target) {
@@ -78,16 +70,28 @@ export function isCorrect(answer, target) {
   if (ALIASES[na] && normalize(ALIASES[na]) === nt) return true;
   if (ALIASES[nt] && normalize(ALIASES[nt]) === na) return true;
 
-  // 3. Whole-string Levenshtein (for short strings)
+  // 3. Whole-string Levenshtein (for short/similar strings)
   const maxWhole = Math.max(na.length, nt.length) > 8 ? 2 : 1;
   if (levenshtein(na, nt) <= maxWhole) return true;
 
-  // 4. Token-based fuzzy match (main workhorse for multi-word titles)
-  if (fuzzyTokenMatch(na, nt)) return true;
+  const ta = tokens(na);
+  const tb = tokens(nt);
 
-  // 5. One fully contains the other (minimum 4 chars)
-  if (na.length >= 4 && nt.includes(na)) return true;
-  if (nt.length >= 4 && na.includes(nt)) return true;
+  // 4. Token-based fuzzy:
+  //    - Every answer token must match some target token
+  //    - Answer must cover at least 60% of target tokens
+  //    - If target has 2+ tokens, answer must also have 2+ tokens (no single-word cheat)
+  if (ta.length && tb.length) {
+    if (tb.length >= 2 && ta.length < 2) return false; // single word vs multi-word title → blocked
+
+    const allMatch = ta.every(at => tb.some(bt => tokenMatch(at, bt)));
+    const coverageOk = ta.length >= Math.ceil(tb.length * 0.6);
+    if (allMatch && coverageOk) return true;
+  }
+
+  // 5. Containment: answer must be at least 65% of target length (avoids "shape" matching "shape of you")
+  if (na.length >= 4 && na.length >= nt.length * 0.65 && nt.includes(na)) return true;
+  if (nt.length >= 4 && nt.length >= na.length * 0.65 && na.includes(nt)) return true;
 
   return false;
 }

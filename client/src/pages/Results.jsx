@@ -141,9 +141,15 @@ export default function Results({ finalScores, roomState, onPlayAgain }) {
           justifyContent: 'center',
           animation: 'fadeIn 0.5s ease 0.6s both',
         }}>
-          <button className="btn btn-primary btn-lg" onClick={onPlayAgain}>
-            ↩ Rejouer
-          </button>
+          {isHost ? (
+            <button className="btn btn-primary btn-lg" onClick={onPlayAgain}>
+              ↩ Rejouer
+            </button>
+          ) : (
+            <button className="btn btn-secondary btn-lg" onClick={onPlayAgain}>
+              ✕ Quitter
+            </button>
+          )}
         </div>
       </div>
     </div>

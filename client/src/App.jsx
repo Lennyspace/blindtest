@@ -103,11 +103,25 @@ export default function App() {
       myAnswer={myAnswer}
     />
   );
+  const playAgain = () => {
+    const isHost = roomState?.hostId === socket.id;
+    if (isHost && roomCode) {
+      socket.emit('game:reset', { code: roomCode });
+      setFinalScores(null);
+      setGameData(null);
+      setRoundResult(null);
+      setMyAnswer(null);
+      setPage('lobby');
+    } else {
+      goHome();
+    }
+  };
+
   if (page === 'results') return (
     <Results
       finalScores={finalScores}
       roomState={roomState}
-      onPlayAgain={goHome}
+      onPlayAgain={playAgain}
     />
   );
 }

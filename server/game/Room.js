@@ -39,8 +39,21 @@ function pickDiverse(pool, count) {
   return shuffle(picked); // shuffle again so order is random too
 }
 
-// Speed bonus: decreasing per rank
+// Speed bonus for finding BOTH (artist + title) — decreasing per rank
 const SPEED_BONUS = [300, 200, 150, 100, 50];
+
+// Points per field based on elapsed time:
+// - Before hint (< 15s): 500 → 200 linearly
+// - After hint (>= 15s): 250 → 80 linearly
+const HINT_AFTER_MS = 15000;
+function calcFieldPoints(elapsedMs, durationMs) {
+  const afterHint = elapsedMs >= HINT_AFTER_MS;
+  const window = afterHint
+    ? Math.min(1, Math.max(0, (elapsedMs - HINT_AFTER_MS) / (durationMs - HINT_AFTER_MS)))
+    : Math.min(1, elapsedMs / Math.min(durationMs, HINT_AFTER_MS));
+  const [max, min] = afterHint ? [250, 80] : [500, 200];
+  return Math.max(min, Math.round(max - (max - min) * window));
+}
 
 export class Room {
   constructor(code, hostId, hostName) {
@@ -88,6 +101,24 @@ export class Room {
   }
 
   isEmpty() { return this.players.size === 0; }
+
+  resetToLobby() {
+    this.state = 'lobby';
+    this.currentRound = 0;
+    this.playlist = [];
+    this.allTracks = undefined;
+    this.playlistName = '';
+    this.currentVideo = null;
+    this.currentLyricsAnswer = null;
+    clearTimeout(this.roundTimer);
+    clearTimeout(this.autoNextTimer);
+    clearTimeout(this.hintTimer);
+    for (const p of this.players.values()) {
+      p.score = 0; p.roundScore = 0;
+      p.artistCorrect = false; p.titleCorrect = false;
+      p.finished = false; p.finishTime = null;
+    }
+  }
 
   configure({ roundCount, duration, hints, autoNext, mode }) {
     if (roundCount) this.config.roundCount = Math.min(Math.max(1, roundCount), 30);
@@ -148,22 +179,27 @@ export class Room {
     let newArtist = player.artistCorrect;
     let newTitle  = player.titleCorrect;
 
+    const elapsed = Date.now() - this.roundStartTime;
+    const durationMs = this.config.duration * 1000;
+
     if (this.config.mode === 'lyrics') {
-      // Lyrics mode: only check the lyrics answer (mapped to titleCorrect)
       if (!player.titleCorrect && answerTitle?.trim() && this.currentLyricsAnswer) {
         if (isCorrect(answerTitle, this.currentLyricsAnswer)) {
-          player.titleCorrect = true; newTitle = true; points += 1000;
+          player.titleCorrect = true; newTitle = true;
+          points += calcFieldPoints(elapsed, durationMs) * 2; // ~same scale as classic (artist+title)
         }
       }
     } else {
       if (!player.artistCorrect && answerArtist?.trim()) {
         if (isCorrect(answerArtist, artist)) {
-          player.artistCorrect = true; newArtist = true; points += 500;
+          player.artistCorrect = true; newArtist = true;
+          points += calcFieldPoints(elapsed, durationMs);
         }
       }
       if (!player.titleCorrect && answerTitle?.trim()) {
         if (isCorrect(answerTitle, title)) {
-          player.titleCorrect = true; newTitle = true; points += 500;
+          player.titleCorrect = true; newTitle = true;
+          points += calcFieldPoints(elapsed, durationMs);
         }
       }
     }
