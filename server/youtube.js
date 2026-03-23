@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { cleanTitle } from './cleanTitle.js';
 
 const YT_API = 'https://www.googleapis.com/youtube/v3';
 
@@ -12,19 +13,6 @@ export function extractPlaylistId(input) {
   } catch {
     return null;
   }
-}
-
-function cleanTitle(s) {
-  return s
-    // Remove parenthetical/bracket noise: (Remastered 2010), [Deluxe], (Radio Edit), etc.
-    .replace(/\s*[\[(][^\])]*(remaster|remastered|deluxe|edition|version|radio\s*edit|single|live|acoustic|instrumental|anniversary|bonus|extended|explicit|clean|mono|stereo|\d{4})[^\])]*[\])]/gi, '')
-    // Remove standalone year in parens: (2019)
-    .replace(/\s*\(\d{4}\)/g, '')
-    // Remove production credits: (prod. by ...) [prod. ...]
-    .replace(/\s*[\[|(](prod\.?.*?)[)\]]/gi, '')
-    // Remove video type tags: (Official Video), [Lyrics], etc.
-    .replace(/\s*[\[(](official\s*(music\s*)?video|lyrics?|audio|clip\s*officiel|hd|hq|4k|visualizer|lyric\s*video|vevo|paroles?)[)\]]/gi, '')
-    .trim();
 }
 
 function parseVideoTitle(raw, channelTitle) {
