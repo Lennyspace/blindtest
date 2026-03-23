@@ -19,6 +19,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
   const [customUrl, setCustomUrl] = useState('');
   const [roundCount, setRoundCount] = useState(10);
   const [duration, setDuration] = useState(30);
+  const [hints, setHints] = useState(true);
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [trackCount, setTrackCount] = useState(null);
@@ -59,6 +60,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
       customUrl: customUrl.trim() || undefined,
       roundCount,
       duration,
+      hints,
     });
   };
 
@@ -140,7 +142,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                 </div>
 
                 {/* Settings */}
-                <div className="card" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                <div className="card" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
                   {/* Rounds */}
                   <div style={{ flex: 1, minWidth: '140px' }}>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -181,6 +183,30 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                         </button>
                       ))}
                     </div>
+                    </div>
+
+                  {/* Hints toggle */}
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: '2px' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Options
+                    </p>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                      <div onClick={() => setHints(h => !h)} style={{
+                        width: '36px', height: '20px', borderRadius: '10px', flexShrink: 0,
+                        background: hints ? 'var(--primary)' : 'var(--surface-3)',
+                        border: `1px solid ${hints ? 'rgba(124,58,237,0.5)' : 'var(--border)'}`,
+                        position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: '2px',
+                          left: hints ? '18px' : '2px',
+                          width: '14px', height: '14px', borderRadius: '50%',
+                          background: 'white', transition: 'left 0.2s',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        }}/>
+                      </div>
+                      <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>💡 Indices à 15s</span>
+                    </label>
                   </div>
                 </div>
 
@@ -227,6 +253,10 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                         <p style={{ fontSize: '14px', fontWeight: 500 }}>{playlistName}</p>
                       </div>
                     )}
+                    <div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Indices</p>
+                      <p style={{ fontSize: '14px', fontWeight: 500 }}>{configInfo.hints ? '💡 Oui' : '—'}</p>
+                    </div>
                   </div>
                 )}
                 <div style={{

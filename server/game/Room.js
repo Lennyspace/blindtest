@@ -55,7 +55,7 @@ export class Room {
     this.roundTimer = null;
     this.currentVideo = null;
     this.speedOrder = [];
-    this.config = { roundCount: 10, duration: 30 };
+    this.config = { roundCount: 10, duration: 30, hints: true };
     this._addPlayer(hostId, hostName, true);
   }
 
@@ -88,9 +88,10 @@ export class Room {
 
   isEmpty() { return this.players.size === 0; }
 
-  configure({ roundCount, duration }) {
+  configure({ roundCount, duration, hints }) {
     if (roundCount) this.config.roundCount = Math.min(Math.max(1, roundCount), 30);
     if (duration)   this.config.duration   = Math.min(Math.max(10, duration), 90);
+    if (hints !== undefined) this.config.hints = hints;
   }
 
   setPlaylist(tracks, name = '') {
@@ -118,6 +119,7 @@ export class Room {
       p.artistCorrect = false;
       p.titleCorrect = false;
       p.finished = false;
+      p.finishTime = null;
     }
     return {
       roundIndex: this.currentRound,
@@ -152,6 +154,7 @@ export class Room {
 
     if (player.artistCorrect && player.titleCorrect && !player.finished) {
       player.finished = true;
+      player.finishTime = Date.now() - this.roundStartTime;
       const rank = this.speedOrder.length;
       this.speedOrder.push(socketId);
       points += SPEED_BONUS[rank] ?? 0;
@@ -187,14 +190,30 @@ export class Room {
   endRound() {
     this.state = 'round-end';
     const scores = {};
+    const stats = {};
     for (const [id, p] of this.players) {
       scores[id] = { name: p.name, score: p.score, roundScore: p.roundScore };
+      stats[id] = {
+        artistCorrect: p.artistCorrect,
+        titleCorrect: p.titleCorrect,
+        finishTime: p.finishTime, // ms, null if didn't finish
+      };
     }
     return {
       artist: this.currentVideo.artist,
       title:  this.currentVideo.title,
       thumbnail: this.currentVideo.thumbnail,
       scores,
+      stats,
+    };
+  }
+
+  getHint() {
+    if (!this.currentVideo) return null;
+    const firstLetter = s => s?.trim()?.[0]?.toUpperCase() ?? '?';
+    return {
+      artistHint: firstLetter(this.currentVideo.artist),
+      titleHint:  firstLetter(this.currentVideo.title),
     };
   }
 

@@ -70,6 +70,17 @@ function emitRoomState(room) {
 function scheduleRoundEnd(room, duration) {
   clearTimeout(room.roundTimer);
   clearTimeout(room.autoNextTimer);
+  clearTimeout(room.hintTimer);
+
+  // Hint after 15s (if enabled and duration long enough)
+  if (room.config.hints && duration > HINT_AFTER_SEC) {
+    room.hintTimer = setTimeout(() => {
+      if (room.state !== 'playing') return;
+      const hint = room.getHint();
+      if (hint) io.to(room.code).emit('game:hint', hint);
+    }, HINT_AFTER_SEC * 1000);
+  }
+
   room.roundTimer = setTimeout(() => {
     if (room.state !== 'playing') return;
     const result = room.endRound();
@@ -79,7 +90,9 @@ function scheduleRoundEnd(room, duration) {
   }, duration * 1000);
 }
 
-const AUTO_NEXT_DELAY = 7000; // 7s after reveal before auto-advancing
+const AUTO_NEXT_DELAY = 8000;
+const COUNTDOWN_SEC   = 3;
+const HINT_AFTER_SEC  = 15;
 
 function scheduleAutoNext(room) {
   clearTimeout(room.autoNextTimer);
@@ -137,12 +150,12 @@ io.on('connection', (socket) => {
   });
 
   // Host configures the game (playlist + settings)
-  socket.on('game:configure', async ({ code, playlistId, customUrl, roundCount, duration }) => {
+  socket.on('game:configure', async ({ code, playlistId, customUrl, roundCount, duration, hints }) => {
     const room = rooms.get(code);
     if (!room || room.hostId !== socket.id) return;
     if (room.state !== 'lobby') return;
 
-    room.configure({ roundCount, duration });
+    room.configure({ roundCount, duration, hints });
 
     // Detect source and resolve ID
     const isDeezer = customUrl?.includes('deezer.com');
