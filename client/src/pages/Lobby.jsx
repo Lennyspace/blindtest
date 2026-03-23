@@ -21,6 +21,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
   const [duration, setDuration] = useState(30);
   const [hints, setHints] = useState(true);
   const [autoNext, setAutoNext] = useState(8);
+  const [mode, setMode] = useState('classic');
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [trackCount, setTrackCount] = useState(null);
@@ -63,6 +64,7 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
       duration,
       hints,
       autoNext,
+      mode,
     });
   };
 
@@ -105,6 +107,35 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
 
             {isHost ? (
               <form onSubmit={handleConfigure} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                {/* Mode */}
+                <div className="card">
+                  <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Mode de jeu
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {[
+                      { id: 'classic', emoji: '🎧', label: 'Blind test', desc: 'Trouve l\'artiste et le titre' },
+                      { id: 'lyrics',  emoji: '🎤', label: 'N\'oublie pas les paroles', desc: 'Complète les paroles manquantes' },
+                    ].map(m => (
+                      <button key={m.id} type="button"
+                        onClick={() => setMode(m.id)}
+                        style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px',
+                          padding: '12px 14px', borderRadius: 'var(--radius)', textAlign: 'left',
+                          background: mode === m.id ? 'var(--primary-dim)' : 'var(--surface-2)',
+                          border: `1px solid ${mode === m.id ? 'rgba(124,58,237,0.4)' : 'var(--border)'}`,
+                          color: mode === m.id ? '#c4b5fd' : 'var(--text-dim)',
+                          cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                      >
+                        <span style={{ fontSize: '20px' }}>{m.emoji}</span>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{m.label}</span>
+                        <span style={{ fontSize: '11px', color: mode === m.id ? '#a78bfa' : 'var(--text-muted)', fontWeight: 400 }}>{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Themes */}
                 <div className="card">
@@ -259,6 +290,12 @@ export default function Lobby({ code, roomState, error, setError, onLeave }) {
                 </h3>
                 {configInfo && (
                   <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                    <div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Mode</p>
+                      <p style={{ fontSize: '14px', fontWeight: 500 }}>
+                        {configInfo.mode === 'lyrics' ? '🎤 Paroles' : '🎧 Blind test'}
+                      </p>
+                    </div>
                     <div>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Manches</p>
                       <p style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 700 }}>{configInfo.roundCount}</p>

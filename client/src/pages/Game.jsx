@@ -27,6 +27,7 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
   const prevAnswer = useRef(null);
 
   const isHost = roomState?.hostId === socket.id;
+  const isLyricsMode = gameData?.mode === 'lyrics';
   const players = [...(roomState?.players || [])].sort((a, b) => b.score - a.score);
   const roundIndex = gameData?.roundIndex ?? 0;
   const totalRounds = gameData?.total ?? roomState?.totalRounds ?? 10;
@@ -246,6 +247,16 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
                   <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{roundResult.artist}</div>
                 </div>
               </div>
+              {roundResult.lyricsAnswer && (
+                <div style={{
+                  marginTop: '10px', padding: '10px 14px',
+                  background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.25)',
+                  borderRadius: 'var(--radius)', fontSize: '14px', color: '#c4b5fd',
+                  fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                }}>
+                  🎤 « {roundResult.lyricsAnswer} »
+                </div>
+              )}
               {myAnswer && (
                 <div style={{
                   marginTop: '14px', padding: '9px 12px',
@@ -315,83 +326,156 @@ export default function Game({ code, roomState, gameData, roundResult, myAnswer 
           {!isOver && (
             <form onSubmit={submit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-              {/* Live partial reveals */}
-              {myAnswer?.artistCorrect && myAnswer?.canonicalArtist && (
-                <div style={{
-                  padding: '8px 12px', background: 'var(--success-dim)',
-                  border: '1px solid rgba(16,185,129,0.2)', borderRadius: 'var(--radius)',
-                  fontSize: '13px', color: '#6ee7b7', display: 'flex', gap: '8px',
-                  animation: 'popIn 0.3s ease',
-                }}>
-                  ✓ Artiste : <strong>{myAnswer.canonicalArtist}</strong>
-                </div>
-              )}
-              {myAnswer?.titleCorrect && myAnswer?.canonicalTitle && (
-                <div style={{
-                  padding: '8px 12px', background: 'var(--success-dim)',
-                  border: '1px solid rgba(16,185,129,0.2)', borderRadius: 'var(--radius)',
-                  fontSize: '13px', color: '#6ee7b7', display: 'flex', gap: '8px',
-                  animation: 'popIn 0.3s ease',
-                }}>
-                  ✓ Titre : <strong>{myAnswer.canonicalTitle}</strong>
-                </div>
-              )}
+              {isLyricsMode ? (
+                /* ── Lyrics mode ── */
+                <>
+                  {/* Context lines */}
+                  {gameData?.lyricsContext ? (
+                    <div style={{
+                      padding: '14px 16px', background: 'var(--surface-2)',
+                      borderRadius: 'var(--radius)', border: '1px solid var(--border)',
+                      fontFamily: 'var(--font-display)', fontSize: '15px', lineHeight: 1.9,
+                      color: 'var(--text-dim)', whiteSpace: 'pre-line',
+                    }}>
+                      {gameData.lyricsContext}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '10px', color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center' }}>
+                      ⏳ Chargement des paroles…
+                    </div>
+                  )}
 
-              {/* Hint */}
-              {hint && (
-                <div style={{
-                  padding: '7px 12px', background: 'rgba(251,191,36,0.1)',
-                  border: '1px solid rgba(251,191,36,0.25)', borderRadius: 'var(--radius)',
-                  fontSize: '12px', color: '#fbbf24', display: 'flex', gap: '12px',
-                  animation: 'slideUp 0.3s ease',
-                }}>
-                  💡 Indice —
-                  {!myAnswer?.artistCorrect && <span>Artiste : <strong>{hint.artistHint}…</strong></span>}
-                  {!myAnswer?.titleCorrect && <span>Titre : <strong>{hint.titleHint}…</strong></span>}
-                </div>
+                  {/* Blank line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ flex: 1, height: '2px', background: 'var(--primary)', borderRadius: '2px', opacity: 0.6 }}/>
+                    <span style={{ fontSize: '20px', color: 'var(--primary)', fontWeight: 900 }}>?</span>
+                    <div style={{ flex: 1, height: '2px', background: 'var(--primary)', borderRadius: '2px', opacity: 0.6 }}/>
+                  </div>
+
+                  {/* After line (blurred) */}
+                  {gameData?.lyricsAfter && (
+                    <div style={{
+                      padding: '6px 16px', fontSize: '14px', lineHeight: 1.8,
+                      color: 'var(--text-muted)', filter: 'blur(5px)', userSelect: 'none',
+                      fontFamily: 'var(--font-display)',
+                    }}>
+                      {gameData.lyricsAfter}
+                    </div>
+                  )}
+
+                  {/* Input */}
+                  {myAnswer?.titleCorrect ? (
+                    <div style={{
+                      padding: '10px 14px', background: 'var(--success-dim)',
+                      border: '1px solid rgba(16,185,129,0.2)', borderRadius: 'var(--radius)',
+                      fontSize: '14px', color: '#6ee7b7', animation: 'popIn 0.3s ease',
+                      fontFamily: 'var(--font-display)', fontWeight: 600,
+                    }}>
+                      ✓ {myAnswer.canonicalTitle}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input
+                        ref={artistRef}
+                        className={titleShake ? 'shake-wrong' : ''}
+                        placeholder="Complète les paroles…"
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <button type="submit" className="btn btn-primary">Envoyer</button>
+                    </div>
+                  )}
+
+                  {myAnswer?.points > 0 && (
+                    <span key={myAnswer.totalScore} style={{
+                      fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '18px',
+                      color: 'var(--success)', animation: 'popIn 0.3s ease', textAlign: 'center',
+                    }}>
+                      +{myAnswer.points}
+                    </span>
+                  )}
+                </>
+              ) : (
+                /* ── Classic mode ── */
+                <>
+                  {myAnswer?.artistCorrect && myAnswer?.canonicalArtist && (
+                    <div style={{
+                      padding: '8px 12px', background: 'var(--success-dim)',
+                      border: '1px solid rgba(16,185,129,0.2)', borderRadius: 'var(--radius)',
+                      fontSize: '13px', color: '#6ee7b7', display: 'flex', gap: '8px',
+                      animation: 'popIn 0.3s ease',
+                    }}>
+                      ✓ Artiste : <strong>{myAnswer.canonicalArtist}</strong>
+                    </div>
+                  )}
+                  {myAnswer?.titleCorrect && myAnswer?.canonicalTitle && (
+                    <div style={{
+                      padding: '8px 12px', background: 'var(--success-dim)',
+                      border: '1px solid rgba(16,185,129,0.2)', borderRadius: 'var(--radius)',
+                      fontSize: '13px', color: '#6ee7b7', display: 'flex', gap: '8px',
+                      animation: 'popIn 0.3s ease',
+                    }}>
+                      ✓ Titre : <strong>{myAnswer.canonicalTitle}</strong>
+                    </div>
+                  )}
+
+                  {hint && (
+                    <div style={{
+                      padding: '7px 12px', background: 'rgba(251,191,36,0.1)',
+                      border: '1px solid rgba(251,191,36,0.25)', borderRadius: 'var(--radius)',
+                      fontSize: '12px', color: '#fbbf24', display: 'flex', gap: '12px',
+                      animation: 'slideUp 0.3s ease',
+                    }}>
+                      💡 Indice —
+                      {!myAnswer?.artistCorrect && <span>Artiste : <strong>{hint.artistHint}…</strong></span>}
+                      {!myAnswer?.titleCorrect && <span>Titre : <strong>{hint.titleHint}…</strong></span>}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>
+                        Artiste
+                      </label>
+                      <input
+                        ref={artistRef}
+                        className={myAnswer?.artistCorrect ? 'correct' : artistShake ? 'shake-wrong' : ''}
+                        placeholder="Artiste…"
+                        value={myAnswer?.artistCorrect ? (myAnswer.canonicalArtist || artist) : artist}
+                        onChange={e => setArtist(e.target.value)}
+                        disabled={myAnswer?.artistCorrect}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>
+                        Titre
+                      </label>
+                      <input
+                        className={myAnswer?.titleCorrect ? 'correct' : titleShake ? 'shake-wrong' : ''}
+                        placeholder="Titre…"
+                        value={myAnswer?.titleCorrect ? (myAnswer.canonicalTitle || title) : title}
+                        onChange={e => setTitle(e.target.value)}
+                        disabled={myAnswer?.titleCorrect}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={fullyCorrect}>
+                      {fullyCorrect ? '✓ Tout trouvé !' : 'Envoyer'}
+                    </button>
+                    {myAnswer?.points > 0 && (
+                      <span key={myAnswer.totalScore} style={{
+                        fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '18px',
+                        color: 'var(--success)', animation: 'popIn 0.3s ease', flexShrink: 0,
+                      }}>
+                        +{myAnswer.points}
+                      </span>
+                    )}
+                  </div>
+                </>
               )}
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>
-                    Artiste
-                  </label>
-                  <input
-                    ref={artistRef}
-                    className={myAnswer?.artistCorrect ? 'correct' : artistShake ? 'shake-wrong' : ''}
-                    placeholder="Artiste…"
-                    value={myAnswer?.artistCorrect ? (myAnswer.canonicalArtist || artist) : artist}
-                    onChange={e => setArtist(e.target.value)}
-                    disabled={myAnswer?.artistCorrect}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>
-                    Titre
-                  </label>
-                  <input
-                    className={myAnswer?.titleCorrect ? 'correct' : titleShake ? 'shake-wrong' : ''}
-                    placeholder="Titre…"
-                    value={myAnswer?.titleCorrect ? (myAnswer.canonicalTitle || title) : title}
-                    onChange={e => setTitle(e.target.value)}
-                    disabled={myAnswer?.titleCorrect}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={fullyCorrect}>
-                  {fullyCorrect ? '✓ Tout trouvé !' : 'Envoyer'}
-                </button>
-                {myAnswer?.points > 0 && (
-                  <span key={myAnswer.totalScore} style={{
-                    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '18px',
-                    color: 'var(--success)', animation: 'popIn 0.3s ease', flexShrink: 0,
-                  }}>
-                    +{myAnswer.points}
-                  </span>
-                )}
-              </div>
             </form>
           )}
         </div>

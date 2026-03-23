@@ -55,7 +55,8 @@ export class Room {
     this.roundTimer = null;
     this.currentVideo = null;
     this.speedOrder = [];
-    this.config = { roundCount: 10, duration: 30, hints: true, autoNext: 8 };
+    this.config = { roundCount: 10, duration: 30, hints: true, autoNext: 8, mode: 'classic' };
+    this.currentLyricsAnswer = null;
     this._addPlayer(hostId, hostName, true);
   }
 
@@ -88,11 +89,12 @@ export class Room {
 
   isEmpty() { return this.players.size === 0; }
 
-  configure({ roundCount, duration, hints, autoNext }) {
+  configure({ roundCount, duration, hints, autoNext, mode }) {
     if (roundCount) this.config.roundCount = Math.min(Math.max(1, roundCount), 30);
     if (duration)   this.config.duration   = Math.min(Math.max(10, duration), 90);
     if (hints !== undefined) this.config.hints = hints;
     if (autoNext)   this.config.autoNext   = Math.min(Math.max(3, autoNext), 30);
+    if (mode)       this.config.mode       = mode;
   }
 
   setPlaylist(tracks, name = '') {
@@ -114,10 +116,13 @@ export class Room {
     this.roundStartTime = Date.now();
     this.speedOrder = [];
     this.currentVideo = track;
-    const startSeconds = Math.floor(Math.random() * 60) + 30;
+    this.currentLyricsAnswer = null;
+    const isLyrics = this.config.mode === 'lyrics';
+    const startSeconds = isLyrics ? 0 : Math.floor(Math.random() * 60) + 30;
     for (const p of this.players.values()) {
       p.roundScore = 0;
-      p.artistCorrect = false;
+      // In lyrics mode, artist is irrelevant — auto-mark correct so only lyrics is tracked
+      p.artistCorrect = isLyrics ? true : false;
       p.titleCorrect = false;
       p.finished = false;
       p.finishTime = null;
@@ -125,6 +130,7 @@ export class Room {
     return {
       roundIndex: this.currentRound,
       total: this.config.roundCount,
+      mode: this.config.mode,
       source: track.source || 'youtube',
       videoId: track.videoId,
       previewUrl: track.previewUrl,
@@ -142,14 +148,23 @@ export class Room {
     let newArtist = player.artistCorrect;
     let newTitle  = player.titleCorrect;
 
-    if (!player.artistCorrect && answerArtist?.trim()) {
-      if (isCorrect(answerArtist, artist)) {
-        player.artistCorrect = true; newArtist = true; points += 500;
+    if (this.config.mode === 'lyrics') {
+      // Lyrics mode: only check the lyrics answer (mapped to titleCorrect)
+      if (!player.titleCorrect && answerTitle?.trim() && this.currentLyricsAnswer) {
+        if (isCorrect(answerTitle, this.currentLyricsAnswer)) {
+          player.titleCorrect = true; newTitle = true; points += 1000;
+        }
       }
-    }
-    if (!player.titleCorrect && answerTitle?.trim()) {
-      if (isCorrect(answerTitle, title)) {
-        player.titleCorrect = true; newTitle = true; points += 500;
+    } else {
+      if (!player.artistCorrect && answerArtist?.trim()) {
+        if (isCorrect(answerArtist, artist)) {
+          player.artistCorrect = true; newArtist = true; points += 500;
+        }
+      }
+      if (!player.titleCorrect && answerTitle?.trim()) {
+        if (isCorrect(answerTitle, title)) {
+          player.titleCorrect = true; newTitle = true; points += 500;
+        }
       }
     }
 
@@ -167,9 +182,8 @@ export class Room {
     return {
       artistCorrect: newArtist,
       titleCorrect:  newTitle,
-      // Reveal canonical value only when just found
-      canonicalArtist: newArtist ? artist : null,
-      canonicalTitle:  newTitle  ? title  : null,
+      canonicalArtist: newArtist && this.config.mode !== 'lyrics' ? artist : null,
+      canonicalTitle:  newTitle  ? (this.config.mode === 'lyrics' ? this.currentLyricsAnswer : title) : null,
       points,
       totalScore: player.score,
     };
@@ -204,6 +218,7 @@ export class Room {
       artist: this.currentVideo.artist,
       title:  this.currentVideo.title,
       thumbnail: this.currentVideo.thumbnail,
+      lyricsAnswer: this.config.mode === 'lyrics' ? this.currentLyricsAnswer : null,
       scores,
       stats,
     };

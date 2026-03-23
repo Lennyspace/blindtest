@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { Room } from './game/Room.js';
 import { fetchPlaylistTracks, fetchPlaylistInfo, extractPlaylistId } from './youtube.js';
 import { fetchDeezerTracks, fetchDeezerPlaylistInfo, extractDeezerPlaylistId } from './deezer.js';
+import { fetchLyrics, pickLyricsGap } from './lyrics.js';
 import { THEMES } from './themes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -94,9 +95,25 @@ function scheduleRoundEnd(room, duration) {
 const COUNTDOWN_SEC   = 3;
 const HINT_AFTER_SEC  = 15;
 
+async function enrichRoundWithLyrics(room, roundData) {
+  if (room.config.mode !== 'lyrics') return;
+  try {
+    const { artist, title } = room.currentVideo;
+    const lyricsText = await fetchLyrics(artist, title);
+    const gap = pickLyricsGap(lyricsText);
+    if (gap) {
+      room.currentLyricsAnswer = gap.answer;
+      roundData.lyricsContext = gap.context;
+      roundData.lyricsAfter  = gap.after;
+    }
+  } catch (e) {
+    console.warn('Lyrics fetch failed:', e.message);
+  }
+}
+
 function scheduleAutoNext(room, delay) {
   clearTimeout(room.autoNextTimer);
-  room.autoNextTimer = setTimeout(() => {
+  room.autoNextTimer = setTimeout(async () => {
     if (room.state !== 'round-end') return;
     const roundData = room.nextRound();
     if (!roundData) {
@@ -104,6 +121,7 @@ function scheduleAutoNext(room, delay) {
       emitRoomState(room);
       return;
     }
+    await enrichRoundWithLyrics(room, roundData);
     io.to(room.code).emit('game:round-start', roundData);
     emitRoomState(room);
     scheduleRoundEnd(room, roundData.duration);
@@ -150,12 +168,12 @@ io.on('connection', (socket) => {
   });
 
   // Host configures the game (playlist + settings)
-  socket.on('game:configure', async ({ code, playlistId, customUrl, roundCount, duration, hints, autoNext }) => {
+  socket.on('game:configure', async ({ code, playlistId, customUrl, roundCount, duration, hints, autoNext, mode }) => {
     const room = rooms.get(code);
     if (!room || room.hostId !== socket.id) return;
     if (room.state !== 'lobby') return;
 
-    room.configure({ roundCount, duration, hints, autoNext });
+    room.configure({ roundCount, duration, hints, autoNext, mode });
 
     // Detect source and resolve ID
     const isDeezer = customUrl?.includes('deezer.com');
@@ -205,7 +223,7 @@ io.on('connection', (socket) => {
   });
 
   // Host starts the game
-  socket.on('game:start', ({ code }) => {
+  socket.on('game:start', async ({ code }) => {
     const room = rooms.get(code);
     if (!room || room.hostId !== socket.id) return;
     if (room.state !== 'lobby') return;
@@ -221,6 +239,7 @@ io.on('connection', (socket) => {
     const roundData = room.startRound();
     if (!roundData) return;
 
+    await enrichRoundWithLyrics(room, roundData);
     io.to(code).emit('game:round-start', roundData);
     emitRoomState(room);
     scheduleRoundEnd(room, roundData.duration);
@@ -251,7 +270,7 @@ io.on('connection', (socket) => {
   });
 
   // Host advances to next round (manual skip)
-  socket.on('round:next', ({ code }) => {
+  socket.on('round:next', async ({ code }) => {
     const room = rooms.get(code);
     if (!room || room.hostId !== socket.id) return;
     if (room.state !== 'round-end') return;
@@ -265,6 +284,7 @@ io.on('connection', (socket) => {
       return;
     }
 
+    await enrichRoundWithLyrics(room, roundData);
     io.to(code).emit('game:round-start', roundData);
     emitRoomState(room);
     scheduleRoundEnd(room, roundData.duration);
