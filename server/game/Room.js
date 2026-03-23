@@ -122,7 +122,9 @@ export class Room {
     return {
       roundIndex: this.currentRound,
       total: this.config.roundCount,
+      source: track.source || 'youtube',
       videoId: track.videoId,
+      previewUrl: track.previewUrl,
       startSeconds,
       duration: this.config.duration,
       playlistName: this.playlistName,
