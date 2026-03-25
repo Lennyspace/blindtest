@@ -6,8 +6,8 @@ export function cleanTitle(s) {
   return s
     // Remove everything in square brackets: [Explicit], [Remastered 2010], [Official Video], etc.
     .replace(/\s*\[[^\]]*\]/g, '')
-    // Remove parens with version/edition noise keywords
-    .replace(/\s*\([^)]*?(remaster(?:ed)?|deluxe|edition|version|radio\s*edit|single|live|acoustic|instrumental|anniversary|bonus|extended|explicit|clean|mono|stereo|feat\.|ft\.)[^)]*\)/gi, '')
+    // Remove parens with version/edition/video noise keywords
+    .replace(/\s*\([^)]*?(remaster(?:ed)?|deluxe|edition|version|radio\s*edit|single|live|acoustic|instrumental|anniversary|bonus|extended|explicit|clean|mono|stereo|feat\.|ft\.|clip|officiel|official|video|audio|hd|hq|4k|vevo|mv|lyric|visualizer)[^)]*\)/gi, '')
     // Remove parens containing only a year: (2019)
     .replace(/\s*\(\d{4}\)/g, '')
     // Remove production credit parens: (prod. ...) or (prod by ...)
