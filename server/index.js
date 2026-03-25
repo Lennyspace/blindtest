@@ -218,7 +218,7 @@ io.on('connection', (socket) => {
       emitRoomState(room);
     } catch (err) {
       console.error('Playlist error:', err.message);
-      socket.emit('room:error', { message: 'Impossible de charger la playlist' });
+      socket.emit('room:error', { message: `Impossible de charger la playlist (${err.message})` });
     }
   });
 
